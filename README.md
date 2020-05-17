@@ -57,10 +57,11 @@ SDK for interacting with https://coinswitch.co/
         // Provides the address at which the user will deposit the coin
         let ethAddress = Address(
             address: "0x76F6C1eb7A0dc44A5FE669b698bbD20d9e5c51Ff",
-            tag: "xyz123"
+            tag: nil
         )
         let btcAddress = Address(
-            address: "1Q6THRUEKwkdapiFV8K27uFUWNhwTQ2Qxe", tag: "xyb676"
+            address: "1Q6THRUEKwkdapiFV8K27uFUWNhwTQ2Qxe", 
+            tag: nil
         )
 
         let order = Order(
