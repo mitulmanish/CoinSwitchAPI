@@ -88,20 +88,6 @@ struct CoinSwitchService {
         }
     }
     
-    private func data<U: Encodable>(
-        endPoint: Endpoint,
-        method: HTTPMethod,
-        body: U
-    ) -> Observable<Data> {
-        request(endpoint: endPoint, method: method, body: body)
-            .flatMap { request -> Observable<(response: HTTPURLResponse, data: Data)> in
-            self.toData(request: request)
-        }
-        .flatMap { response, data in
-            self.sanitizeResponse(response: response, data: data)
-        }
-    }
-    
     func object<T: Decodable, U: Encodable>(
         endpoint: Endpoint,
         method: HTTPMethod,
@@ -120,23 +106,52 @@ struct CoinSwitchService {
         .flatMap { self.toObject(data: $0) }
     }
     
+    private func data<U: Encodable>(
+        endPoint: Endpoint,
+        method: HTTPMethod,
+        body: U
+    ) -> Observable<Data> {
+        request(endpoint: endPoint, method: method, body: body)
+        .flatMap { $0.rx.data() }
+        .flatMap { self.sanitizeResponse(response: $0, data: $1) }
+    }
+    
     private func data(
         endPoint: Endpoint,
         method: HTTPMethod,
         params: [String: String]
     ) -> Observable<Data> {
         request(endpoint: endPoint, method: method, params: params)
-            .flatMap { request -> Observable<(response: HTTPURLResponse, data: Data)> in
-                self.toData(request: request)
-        }
-        .flatMap { response, data in
-            self.sanitizeResponse(response: response, data: data)
+        .flatMap { $0.rx.data() }
+        .flatMap { self.sanitizeResponse(response: $0, data: $1) }
+    }
+    
+    private func toObject<T: Decodable>(data: Data) -> Observable<T> {
+        do {
+            return Observable.of(try JSONDecoder().decode(T.self, from: data))
+        } catch let error {
+            return Observable.error(error)
         }
     }
     
-    private func toData(request: URLRequest) -> Observable<(response: HTTPURLResponse, data: Data)> {
+    private func sanitizeResponse(
+        response: HTTPURLResponse,
+        data: Data
+    ) -> Observable<Data> {
+        guard let error = NetworkingError.from(httpCode: response.statusCode) else {
+            return Observable.of(data)
+        }
+        return Observable.error(error)
+    }
+}
+
+extension URLRequest: ReactiveCompatible {}
+
+private extension Reactive where Base == URLRequest {
+    func data() -> Observable<(HTTPURLResponse, Data)> {
         Observable.create { observer in
-            let task = URLSession.shared.dataTask(with: request) { (data, respose, error) in
+            let task = URLSession.shared.dataTask(with: self.base) {
+                data, respose, error in
                 if let error = error {
                     observer.onError(error)
                     observer.onCompleted()
@@ -158,23 +173,5 @@ struct CoinSwitchService {
             task.resume()
             return Disposables.create { task.cancel() }
         }
-    }
-    
-    private func toObject<T: Decodable>(data: Data) -> Observable<T> {
-        do {
-            return Observable.of(try JSONDecoder().decode(T.self, from: data))
-        } catch let error {
-            return Observable.error(error)
-        }
-    }
-    
-    private func sanitizeResponse(
-        response: HTTPURLResponse,
-        data: Data
-    ) -> Observable<Data> {
-        guard let error = NetworkingError.from(httpCode: response.statusCode) else {
-            return Observable.of(data)
-        }
-        return Observable.error(error)
     }
 }
